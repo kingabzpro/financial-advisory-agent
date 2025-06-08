@@ -1,0 +1,12 @@
+gradio==5.33.0
+langgraph==0.4.8
+langchain==0.3.25
+langchain-openai==0.3.21
+langchain-community==0.3.24
+tavily-python==0.7.5
+yfinance==0.2.62
+pandas==2.3.0
+numpy==2.3.0
+plotly==6.1.2
+requests==2.32.3
+kaleido==0.2.1
