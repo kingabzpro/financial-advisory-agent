@@ -414,11 +414,11 @@ def determine_intended_tool(message):
     message_lower = message.lower()
     
     tool_detection_map = {
-        "budget_planner": ["budget", "income", "expense", "spending", "allocat"],
-        "investment_analyzer": ["stock", "invest", "buy", "sell", "analyze", "AAPL", "GOOGL", "TSLA"],
-        "portfolio_analyzer": ["portfolio", "holdings", "allocation", "diversif"],
-        "market_trends": ["market", "trend", "news", "sector", "economic"],
-        "expense_tracker": ["track", "expense", "spending", "categoriz"]
+        "budget_planner": ["budget", "income", "expense", "spending", "allocat", "monthly", "plan", "financial plan", "money"],
+        "investment_analyzer": ["stock", "invest", "buy", "sell", "analyze", "AAPL", "GOOGL", "TSLA", "share", "equity"],
+        "portfolio_analyzer": ["portfolio", "holdings", "allocation", "diversif", "asset", "position"],
+        "market_trends": ["market", "trend", "news", "sector", "economic", "latest", "current"],
+        "expense_tracker": ["track", "expense", "spending", "categoriz", "cost"]
     }
     
     tool_names = {
@@ -469,10 +469,39 @@ def process_financial_query(message, history):
     init_message_start_index = len(history)
     
     try:
-        # Process message through agent directly - no animations
+        # Show what tool will be used and processing status
+        intended_tool_key, intended_tool_name = determine_intended_tool(last_user_message)
+        
+        # Always show status for all tools with expected time estimates
+        if intended_tool_name:
+            if intended_tool_key == "market_trends":
+                status_msg = f"🔍 Fetching market news & analyzing trends (estimated 20-30 seconds)..."
+            elif intended_tool_key == "investment_analyzer":
+                status_msg = f"📈 Analyzing stock data & calculating metrics (estimated 10-15 seconds)..."
+            elif intended_tool_key == "budget_planner":
+                status_msg = f"💰 Processing budget analysis (estimated 5-10 seconds)..."
+            elif intended_tool_key == "portfolio_analyzer":
+                status_msg = f"📊 Analyzing portfolio data (estimated 8-12 seconds)..."
+            elif intended_tool_key == "expense_tracker":
+                status_msg = f"💳 Processing expense analysis (estimated 5-10 seconds)..."
+            else:
+                status_msg = f"🔄 Using {intended_tool_name} (estimated 5-15 seconds)..."
+            
+            history.append(ChatMessage(role="assistant", content=status_msg))
+            yield history
+        else:
+            # If no tool detected, show generic processing message
+            history.append(ChatMessage(role="assistant", content=f"🧠 Processing your request (estimated 10-15 seconds)..."))
+            yield history
+        
+        # Process message through agent
         response, tool_used, tool_result = agent.process_message_with_details(
             last_user_message, agent_history
         )
+        
+        # Clear the processing message now that tool is complete
+        if len(history) > init_message_start_index:
+            history.pop()  # Remove the processing message
         # Step 5: Show tool execution results
         if tool_used:
             tool_names = {
@@ -484,11 +513,6 @@ def process_financial_query(message, history):
             }
             tool_display_name = tool_names.get(tool_used, tool_used)
             
-            # Show tool execution completion
-            elapsed = time.time() - start_time
-            history[-1] = ChatMessage(role="assistant", content=f"✅ {tool_display_name} completed successfully... ({elapsed:.1f}s)")
-            yield history
-            time.sleep(0.3)
 
             # Show tool output with metadata
             if tool_result:
@@ -549,7 +573,7 @@ def process_financial_query(message, history):
                 
                 collapsible_content = f"""
 <details>
-<summary><strong>{tool_emoji} {tool_display_name} Results ({elapsed:.1f}s)</strong> - Click to expand</summary>
+<summary><strong>{tool_emoji} {tool_display_name} Results</strong> - Click to expand</summary>
 
 {display_result}
 
@@ -562,14 +586,12 @@ def process_financial_query(message, history):
                 ))
                 yield history
 
-        # Add visualization if applicable with delay
+        # Add visualization if applicable
         if tool_result and tool_used in [
             "budget_planner",
             "portfolio_analyzer",
             "investment_analyzer",
         ]:
-            # Add 1 second delay before data analysis
-            time.sleep(1.0)
             viz_type = {
                 "budget_planner": "budget",
                 "portfolio_analyzer": "portfolio",
@@ -585,7 +607,7 @@ def process_financial_query(message, history):
                     # Create collapsible data analysis output
                     collapsible_analysis = f"""
 <details>
-<summary><strong>🔍 Data Analysis ({elapsed:.1f}s)</strong> - Click to expand</summary>
+<summary><strong>🔍 Data Analysis</strong> - Click to expand</summary>
 
 {analysis_data}
 
@@ -603,34 +625,20 @@ def process_financial_query(message, history):
             except Exception as e:
                 history.pop()
 
-        # Show response generation with timer
-        elapsed = time.time() - start_time
-        history.append(
-            ChatMessage(
-                role="assistant", content=f"✍️ Generating response... ({elapsed:.1f}s)"
-            )
-        )
-        yield history
-        time.sleep(3)
-
-        # Stream the final response
-        words = response.split()
-        streamed_content = ""
-
-        for i, word in enumerate(words):
-            streamed_content += word + " "
-
-            # Update every few words for smooth streaming
-            if i % 5 == 0 or word.endswith((".", "!", "?", ":")):
-                history[-1] = ChatMessage(
-                    role="assistant", content=streamed_content.strip()
-                )
+        # Stream the final response in real-time using LLM streaming
+        if tool_used and tool_result:
+            # Use real LLM streaming
+            streaming_content = ""
+            history.append(ChatMessage(role="assistant", content=""))
+            
+            for chunk in agent.stream_response(last_user_message, tool_result, tool_used):
+                streaming_content += chunk
+                history[-1] = ChatMessage(role="assistant", content=streaming_content)
                 yield history
-                time.sleep(0.08)
-
-        # Final update with complete response (no metadata - just a regular message)
-        history[-1] = ChatMessage(role="assistant", content=response)
-        yield history
+        else:
+            # Fallback for non-streaming response
+            history.append(ChatMessage(role="assistant", content=response))
+            yield history
 
         elapsed = time.time() - start_time
 

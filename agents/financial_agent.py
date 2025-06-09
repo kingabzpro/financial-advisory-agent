@@ -163,25 +163,16 @@ When a user asks a question:
                 # Execute the tool
                 tool_result = tool.func(tool_input)
 
-                # Generate response based on tool result
-                response_prompt = f"""Based on the following analysis from the {selected_tool.replace('_', ' ').title()}:
+                # Generate response based on tool result - optimized for speed
+                response_prompt = f"""Based on this {selected_tool.replace('_', ' ')} analysis, provide a concise financial summary for: {message}
 
-{tool_result}
+Data: {tool_result}
 
-Provide comprehensive financial advice to the user addressing their question: {message}
-
-Guidelines:
-- Be specific and actionable
-- Reference key data points from the analysis
-- Provide clear recommendations
-- Use a professional but friendly tone
-- Structure your response with clear sections if needed"""
+Keep response under 200 words with key insights and 2-3 actionable recommendations."""
 
                 response = self.llm.invoke(
                     [
-                        SystemMessage(
-                            content="You are a professional financial advisor. Provide clear, actionable advice based on the analysis results. Be thorough but concise."
-                        ),
+                        SystemMessage(content="Financial advisor. Be concise and actionable."),
                         HumanMessage(content=response_prompt),
                     ]
                 )
@@ -211,3 +202,32 @@ Guidelines:
         """Process a user message and return response"""
         response, _, _ = self.process_message_with_details(message, history)
         return response
+    
+    def stream_response(self, message: str, tool_result: str, selected_tool: str):
+        """Stream the LLM response in real-time"""
+        response_prompt = f"""Based on the following comprehensive analysis from the {selected_tool.replace('_', ' ').title()}:
+
+{tool_result}
+
+Provide detailed financial advice to the user addressing their question: {message}
+
+Guidelines:
+- Be thorough and comprehensive
+- Reference specific data points from the analysis
+- Provide clear, actionable recommendations with explanations
+- Include multiple scenarios or considerations where relevant
+- Use a professional but friendly tone
+- Structure your response with clear sections
+- Provide context for your recommendations"""
+
+        messages = [
+            SystemMessage(
+                content="You are a professional financial advisor. Provide comprehensive, detailed advice based on the analysis results. Be thorough and educational."
+            ),
+            HumanMessage(content=response_prompt),
+        ]
+        
+        # Stream the response token by token
+        for chunk in self.llm.stream(messages):
+            if chunk.content:
+                yield chunk.content

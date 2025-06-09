@@ -110,7 +110,7 @@ class FinancialTools:
             try:
                 stock = yf.Ticker(symbol.upper())
                 info = stock.info
-                hist = stock.history(period="2y")
+                hist = stock.history(period="1y")  # Reduced from 2y to 1y for speed
 
                 if hist.empty:
                     return f"No data available for {symbol}"
@@ -137,24 +137,20 @@ class FinancialTools:
                 rs = gain / loss
                 rsi = 100 - (100 / (1 + rs)).iloc[-1]
 
-                # MACD calculation
+                # Simplified MACD calculation
                 ema_12 = hist["Close"].ewm(span=12).mean()
                 ema_26 = hist["Close"].ewm(span=26).mean()
                 macd = ema_12 - ema_26
                 macd_signal = macd.ewm(span=9).mean()
-                macd_histogram = macd - macd_signal
 
-                # Bollinger Bands
-                bb_period = 20
-                bb_std = 2
-                bb_middle = hist["Close"].rolling(window=bb_period).mean()
-                bb_std_dev = hist["Close"].rolling(window=bb_period).std()
-                bb_upper = bb_middle + (bb_std_dev * bb_std)
-                bb_lower = bb_middle - (bb_std_dev * bb_std)
+                # Simplified Bollinger Bands (only what we need)
+                bb_middle = hist["Close"].rolling(window=20).mean()
+                bb_std_dev = hist["Close"].rolling(window=20).std()
+                bb_upper = bb_middle + (bb_std_dev * 2)
+                bb_lower = bb_middle - (bb_std_dev * 2)
 
-                # Volatility analysis
+                # Simplified volatility analysis
                 volatility_30d = hist["Close"].pct_change().rolling(30).std().iloc[-1] * 100
-                volatility_90d = hist["Close"].pct_change().rolling(90).std().iloc[-1] * 100
                 
                 # Value at Risk (VaR) - 5% level
                 returns = hist["Close"].pct_change().dropna()
@@ -275,7 +271,6 @@ class FinancialTools:
                     },
                     "risk_assessment": {
                         "volatility_30d": f"{volatility_30d:.1f}%",
-                        "volatility_90d": f"{volatility_90d:.1f}%",
                         "value_at_risk_5%": f"{var_5:.1f}%",
                         "risk_score": f"{risk_score}/6",
                         "risk_factors": risk_factors,
