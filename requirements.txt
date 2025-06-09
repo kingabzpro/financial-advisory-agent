@@ -7,6 +7,4 @@ tavily-python==0.7.5
 yfinance==0.2.62
 pandas==2.3.0
 numpy==2.3.0
-plotly==6.1.2
 requests==2.32.3
-kaleido==0.2.1

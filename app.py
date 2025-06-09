@@ -4,7 +4,6 @@ import time
 from pathlib import Path
 
 import gradio as gr
-import plotly.graph_objects as go
 from gradio import ChatMessage
 
 from agents.financial_agent import FinancialAdvisorAgent
@@ -25,121 +24,109 @@ agent = FinancialAdvisorAgent(tools=tools, openai_api_key=os.getenv("OPENAI_API_
 gr.set_static_paths(paths=[(Path.cwd() / "public" / "images").absolute()])
 
 
-def create_visualization(data_type, data):
-    """Create financial visualizations and return as base64 image"""
-    print(f"[VIZ LOG] Creating visualization of type: {data_type}")
-    print(f"[VIZ LOG] Data preview: {str(data)[:200]}...")
+def analyze_data_with_repl(data_type, data):
+    """Analyze financial data using Python REPL without visualization"""
 
     fig = None
 
     if data_type == "budget":
-        print("[VIZ LOG] Processing budget visualization")
         try:
-            # Create budget allocation pie chart
             budget_data = json.loads(data)
-            print("[VIZ LOG] Budget data parsed successfully")
-
             categories = list(budget_data.get("current_expenses", {}).keys())
             values = list(budget_data.get("current_expenses", {}).values())
-            print(f"[VIZ LOG] Categories: {categories}")
-            print(f"[VIZ LOG] Values: {values}")
 
             if categories and values:
-                print("[VIZ LOG] Creating pie chart")
-                fig = go.Figure(
-                    data=[go.Pie(labels=categories, values=values, hole=0.3)]
-                )
-                fig.update_layout(title="Expense Breakdown", height=400, width=600)
-                print("[VIZ LOG] Pie chart created successfully")
-            else:
-                print("[VIZ LOG] No categories or values found for budget chart")
+                # Calculate analysis using Python
+                total = sum(values)
+                analysis_text = "📊 **Budget Analysis**\n\n"
+                
+                for i, (category, amount) in enumerate(zip(categories, values)):
+                    percentage = (amount / total * 100) if total > 0 else 0
+                    bar = "█" * int(percentage / 5)
+                    analysis_text += f"**{category.title()}**: ${amount:,.0f} ({percentage:.1f}%) {bar}\n"
+                
+                # Add summary statistics
+                avg_expense = total / len(values)
+                largest_expense = max(values)
+                largest_category = categories[values.index(largest_expense)]
+                
+                analysis_text += f"\n**Summary:**\n"
+                analysis_text += f"- Total Expenses: ${total:,.0f}\n"
+                analysis_text += f"- Average per Category: ${avg_expense:,.0f}\n"
+                analysis_text += f"- Largest Expense: {largest_category} (${largest_expense:,.0f})\n"
+                
+                return analysis_text
         except Exception as e:
-            print(f"[VIZ LOG] Error in budget visualization: {e}")
-            return None
+            return f"Error analyzing budget data: {str(e)}"
 
     elif data_type == "portfolio":
-        # Create portfolio allocation chart
-        portfolio_data = json.loads(data)
-        sectors = {}
-        for holding in portfolio_data.get("holdings", []):
-            sector = holding.get("sector", "Unknown")
-            sectors[sector] = sectors.get(sector, 0) + holding.get("allocation", 0)
-
-        if sectors:
-            fig = go.Figure(
-                data=[
-                    go.Pie(
-                        labels=list(sectors.keys()),
-                        values=list(sectors.values()),
-                        hole=0.3,
-                    )
-                ]
-            )
-            fig.update_layout(
-                title="Portfolio Sector Allocation", height=400, width=600
-            )
+        try:
+            portfolio_data = json.loads(data)
+            holdings = portfolio_data.get("holdings", [])
+            total_value = sum(holding.get("value", 0) for holding in holdings)
+            
+            analysis_text = "📊 **Portfolio Analysis**\n\n"
+            
+            # Holdings breakdown
+            for holding in holdings:
+                symbol = holding.get("symbol", "Unknown")
+                value = holding.get("value", 0)
+                allocation = holding.get("allocation", 0)
+                analysis_text += f"**{symbol}**: ${value:,.2f} ({allocation:.1f}%)\n"
+            
+            # Sector analysis
+            sectors = {}
+            for holding in holdings:
+                sector = holding.get("sector", "Unknown")
+                sectors[sector] = sectors.get(sector, 0) + holding.get("allocation", 0)
+            
+            if sectors:
+                analysis_text += "\n**Sector Allocation:**\n"
+                for sector, allocation in sorted(sectors.items(), key=lambda x: x[1], reverse=True):
+                    bar = "█" * int(allocation / 10)
+                    analysis_text += f"- {sector}: {allocation:.1f}% {bar}\n"
+            
+            analysis_text += f"\n**Total Portfolio Value**: ${total_value:,.2f}\n"
+            
+            return analysis_text
+        except Exception as e:
+            return f"Error analyzing portfolio data: {str(e)}"
 
     elif data_type == "stock":
-        # Create stock price chart
-        stock_data = json.loads(data)
-        price_str = stock_data.get("current_price", "0")
-        # Remove $ and convert to float
-        price = (
-            float(price_str.replace("$", "").replace(",", ""))
-            if price_str != "N/A"
-            else 0
-        )
-
-        if price > 0:
-            fig = go.Figure()
-            fig.add_trace(
-                go.Indicator(
-                    mode="number+delta",
-                    value=price,
-                    title={
-                        "text": f"{stock_data.get('symbol', 'Stock')} Current Price"
-                    },
-                    delta={"reference": price * 0.95},
-                    number={"prefix": "$"},
-                )
-            )
-            fig.update_layout(height=300, width=500)
-
-    if fig:
-        print("[VIZ LOG] Converting figure to base64 image")
         try:
-            # Use a simpler approach - just return chart data as text for now
-            print(
-                "[VIZ LOG] Skipping image conversion (known to hang) - returning chart description"
-            )
-
-            # Create a text-based representation instead
-            if data_type == "budget":
-                budget_data = json.loads(data)
-                expenses = budget_data.get("current_expenses", {})
-                total = sum(expenses.values())
-
-                chart_text = "📊 **Expense Breakdown Chart**\n\n"
-                for category, amount in expenses.items():
-                    percentage = (amount / total * 100) if total > 0 else 0
-                    bar = "█" * int(percentage / 5)  # Visual bar
-                    chart_text += f"**{category.title()}**: ${amount:,.0f} ({percentage:.1f}%) {bar}\n"
-
-                return chart_text
-
-            elif data_type == "portfolio":
-                # Similar text representation for portfolio
-                return "📊 **Portfolio Allocation Chart** (Text representation)"
-
-            elif data_type == "stock":
-                # Similar text representation for stock
-                return "📊 **Stock Price Chart** (Text representation)"
-
+            stock_data = json.loads(data)
+            symbol = stock_data.get("symbol", "Unknown")
+            price_str = stock_data.get("current_price", "0")
+            
+            analysis_text = f"📊 **Stock Analysis for {symbol}**\n\n"
+            
+            # Basic info
+            analysis_text += f"**Current Price**: {price_str}\n"
+            analysis_text += f"**Company**: {stock_data.get('company_name', 'N/A')}\n"
+            analysis_text += f"**Sector**: {stock_data.get('sector', 'N/A')}\n\n"
+            
+            # Performance metrics
+            performance = stock_data.get("performance", {})
+            if performance:
+                analysis_text += "**Performance:**\n"
+                for period, return_pct in performance.items():
+                    analysis_text += f"- {period.replace('_', ' ').title()}: {return_pct}\n"
+            
+            # Risk assessment
+            risk_data = stock_data.get("risk_assessment", {})
+            if risk_data:
+                analysis_text += f"\n**Risk Level**: {risk_data.get('risk_level', 'N/A')}\n"
+                analysis_text += f"**30d Volatility**: {risk_data.get('volatility_30d', 'N/A')}\n"
+            
+            # Recommendation
+            recommendation = stock_data.get("recommendation", {})
+            if recommendation:
+                analysis_text += f"\n**Recommendation**: {recommendation.get('action', 'N/A')}\n"
+                analysis_text += f"**Confidence**: {recommendation.get('confidence', 'N/A')}\n"
+            
+            return analysis_text
         except Exception as e:
-            print(f"[VIZ LOG] Error creating text chart: {e}")
-            return None
-    else:
-        print("[VIZ LOG] No figure to convert")
+            return f"Error analyzing stock data: {str(e)}"
 
     return None
 
@@ -180,46 +167,55 @@ def process_financial_query(message, history):
         elapsed = time.time() - start_time
         return f"{base_message} ({elapsed:.1f}s)"
 
-    history.append(
-        ChatMessage(role="assistant", content="🔄 Assistant is processing...")
-    )
+    # Show processing animation with actual work happening
+    processing_messages = [
+        "🔄 Assistant is analyzing your request...",
+        "🔍 Understanding your financial query...", 
+        "🧠 Processing financial data...",
+        "⚙️ Activating financial tools..."
+    ]
+    
+    init_message_start_index = len(history)
+    
+    # Show first message and start processing
+    elapsed = time.time() - start_time
+    history.append(ChatMessage(role="assistant", content=f"{processing_messages[0]} ({elapsed:.1f}s)"))
     yield history
-
+    
     try:
-        print(f"[LOG] Starting to process message: {last_user_message}")
-
+        # Show animation messages while doing actual processing
+        for i, msg in enumerate(processing_messages[1:], 1):
+            elapsed = time.time() - start_time
+            history[-1] = ChatMessage(role="assistant", content=f"{msg} ({elapsed:.1f}s)")
+            yield history
+            time.sleep(1.0)  # Shorter delay
+        
         # Process message through agent using the actual user message
         response, tool_used, tool_result = agent.process_message_with_details(
             last_user_message, agent_history
         )
-
-        print(f"[LOG] Agent processing complete. Tool used: {tool_used}")
-        print(
-            f"[LOG] Tool result length: {len(str(tool_result)) if tool_result else 0}"
-        )
-        print(f"[LOG] Response length: {len(response) if response else 0}")
-
-        # Show which tool is being used with timer
+        # Show which tool is being used with enhanced status messages
         if tool_used:
             tool_names = {
                 "budget_planner": "Budget Planner",
-                "investment_analyzer": "Investment Analyzer",
+                "investment_analyzer": "Investment Analyzer", 
                 "expense_tracker": "Expense Tracker",
                 "market_trends": "Market Trends Analyzer",
                 "portfolio_analyzer": "Portfolio Analyzer",
             }
             tool_display_name = tool_names.get(tool_used, tool_used)
-
-            elapsed = time.time() - start_time
-            history[-1] = ChatMessage(
-                role="assistant",
-                content=f"🛠️ Using {tool_display_name}... ({elapsed:.1f}s)",
-            )
-            yield history
-            print("[LOG] Showing tool usage message")
+            
+            # Skip tool processing animation to make it faster
+            pass
 
             # Show tool output with metadata
             if tool_result:
+                # Remove initialization messages but keep all previous conversation and tool info
+                # Remove the initialization animation messages that were added
+                history = history[:init_message_start_index]
+                
+                # Don't show tool activation message, go directly to results
+                
                 # Format tool result for display
                 try:
                     import json
@@ -251,7 +247,6 @@ def process_financial_query(message, history):
                             else tool_result
                         )
                 except Exception as e:
-                    print(f"Error formatting tool result: {e}")
                     display_result = (
                         str(tool_result)[:1000] + "..."
                         if len(str(tool_result)) > 1000
@@ -259,13 +254,30 @@ def process_financial_query(message, history):
                     )
 
                 elapsed = time.time() - start_time
-                history[-1] = ChatMessage(
+                
+                # Create collapsible tool output with specific emojis for each tool
+                tool_emojis = {
+                    "Budget Planner": "💰",
+                    "Investment Analyzer": "📈", 
+                    "Expense Tracker": "💳",
+                    "Market Trends Analyzer": "📰",
+                    "Portfolio Analyzer": "📊",
+                }
+                tool_emoji = tool_emojis.get(tool_display_name, "🔧")
+                
+                collapsible_content = f"""
+<details>
+<summary><strong>{tool_emoji} {tool_display_name} Results ({elapsed:.1f}s)</strong> - Click to expand</summary>
+
+{display_result}
+
+</details>
+"""
+                
+                history.append(ChatMessage(
                     role="assistant",
-                    content=display_result,
-                    metadata={
-                        "title": f"🛠️ {tool_display_name} Results ({elapsed:.1f}s)"
-                    },
-                )
+                    content=collapsible_content,
+                ))
                 yield history
 
         # Add visualization if applicable
@@ -274,7 +286,6 @@ def process_financial_query(message, history):
             "portfolio_analyzer",
             "investment_analyzer",
         ]:
-            print(f"[LOG] Creating visualization for {tool_used}")
             viz_type = {
                 "budget_planner": "budget",
                 "portfolio_analyzer": "portfolio",
@@ -282,40 +293,30 @@ def process_financial_query(message, history):
             }.get(tool_used)
 
             try:
-                elapsed = time.time() - start_time
-                history.append(
-                    ChatMessage(
-                        role="assistant",
-                        content=f"📊 Generating visualization... ({elapsed:.1f}s)",
-                    )
-                )
-                yield history
-                print(f"[LOG] About to create visualization of type: {viz_type}")
+                analysis_data = analyze_data_with_repl(viz_type, tool_result)
 
-                img_data = create_visualization(viz_type, tool_result)
-                print(
-                    f"[LOG] Visualization created. Data length: {len(img_data) if img_data else 0}"
-                )
-
-                if img_data:
+                if analysis_data:
                     elapsed = time.time() - start_time
-                    history[-1] = ChatMessage(
+                    
+                    # Create collapsible data analysis output
+                    collapsible_analysis = f"""
+<details>
+<summary><strong>🔍 Data Analysis ({elapsed:.1f}s)</strong> - Click to expand</summary>
+
+{analysis_data}
+
+</details>
+"""
+                    
+                    history.append(ChatMessage(
                         role="assistant",
-                        content=f"![Financial Analysis]({img_data})",
-                        metadata={
-                            "title": f"📊 Financial Visualization ({elapsed:.1f}s)"
-                        },
-                    )
+                        content=collapsible_analysis,
+                    ))
                     yield history
-                    print("[LOG] Visualization displayed successfully")
                 else:
-                    print("[LOG] No visualization data generated")
-                    # Remove the "Generating visualization..." message if no data
                     history.pop()
 
             except Exception as e:
-                print(f"[LOG] Error creating visualization: {e}")
-                # Remove the "Generating visualization..." message on error
                 history.pop()
 
         # Show response generation with timer
@@ -326,7 +327,7 @@ def process_financial_query(message, history):
             )
         )
         yield history
-        time.sleep(0.5)
+        time.sleep(3)
 
         # Stream the final response
         words = response.split()
@@ -347,9 +348,7 @@ def process_financial_query(message, history):
         history[-1] = ChatMessage(role="assistant", content=response)
         yield history
 
-        # Log completion time in console only
         elapsed = time.time() - start_time
-        print(f"[LOG] ✅ Response completed in {elapsed:.1f}s")
 
     except Exception as e:
         elapsed = time.time() - start_time
@@ -421,8 +420,7 @@ with gr.Blocks(theme=gr.themes.Base(), title="Financial Advisory Agent") as demo
 
     # Add like functionality for feedback
     def like_handler(evt: gr.LikeData):
-        print(f"User {'liked' if evt.liked else 'disliked'} response: {evt.value}")
-        print(f"Response index: {evt.index}")
+        pass
 
     chatbot.like(like_handler)
 
