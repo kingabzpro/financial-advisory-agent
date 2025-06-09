@@ -25,35 +25,87 @@ gr.set_static_paths(paths=[(Path.cwd() / "public" / "images").absolute()])
 
 
 def analyze_data_with_repl(data_type, data):
-    """Analyze financial data using Python REPL without visualization"""
-
-    fig = None
+    """Analyze financial data using Python REPL with comprehensive insights"""
 
     if data_type == "budget":
         try:
             budget_data = json.loads(data)
             categories = list(budget_data.get("current_expenses", {}).keys())
             values = list(budget_data.get("current_expenses", {}).values())
+            income = budget_data.get("monthly_income", budget_data.get("income", 0))
 
             if categories and values:
-                # Calculate analysis using Python
-                total = sum(values)
-                analysis_text = "📊 **Budget Analysis**\n\n"
+                total_expenses = sum(values)
+                analysis_text = "💰 **Comprehensive Budget Analysis**\n\n"
                 
+                # Income vs Expenses Overview
+                analysis_text += "## 📈 **Income vs Expenses Overview**\n"
+                analysis_text += f"- **Monthly Income**: ${income:,.0f}\n"
+                analysis_text += f"- **Total Expenses**: ${total_expenses:,.0f}\n"
+                
+                if income > 0:
+                    remaining = income - total_expenses
+                    savings_rate = (remaining / income * 100) if income > 0 else 0
+                    
+                    if remaining > 0:
+                        analysis_text += f"- **💚 Surplus**: ${remaining:,.0f}\n"
+                        analysis_text += f"- **💎 Savings Rate**: {savings_rate:.1f}%\n"
+                    else:
+                        analysis_text += f"- **🔴 Deficit**: ${abs(remaining):,.0f}\n"
+                        analysis_text += f"- **⚠️ Overspending**: {abs(savings_rate):.1f}%\n"
+                
+                # Expense Breakdown with Progress Bars
+                analysis_text += "\n## 💳 **Expense Breakdown**\n"
                 for i, (category, amount) in enumerate(zip(categories, values)):
-                    percentage = (amount / total * 100) if total > 0 else 0
-                    bar = "█" * int(percentage / 5)
-                    analysis_text += f"**{category.title()}**: ${amount:,.0f} ({percentage:.1f}%) {bar}\n"
+                    percentage = (amount / total_expenses * 100) if total_expenses > 0 else 0
+                    income_percentage = (amount / income * 100) if income > 0 else 0
+                    bar = "█" * min(int(percentage / 3), 30)  # Max 30 chars
+                    
+                    analysis_text += f"**{category.title()}**: ${amount:,.0f}\n"
+                    analysis_text += f"  └─ {percentage:.1f}% of expenses | {income_percentage:.1f}% of income {bar}\n\n"
                 
-                # Add summary statistics
-                avg_expense = total / len(values)
+                # Financial Health Metrics
+                analysis_text += "## 📊 **Financial Health Metrics**\n"
+                avg_expense = total_expenses / len(values)
                 largest_expense = max(values)
+                smallest_expense = min(values)
                 largest_category = categories[values.index(largest_expense)]
+                smallest_category = categories[values.index(smallest_expense)]
                 
-                analysis_text += f"\n**Summary:**\n"
-                analysis_text += f"- Total Expenses: ${total:,.0f}\n"
-                analysis_text += f"- Average per Category: ${avg_expense:,.0f}\n"
-                analysis_text += f"- Largest Expense: {largest_category} (${largest_expense:,.0f})\n"
+                analysis_text += f"- **Average Category Expense**: ${avg_expense:,.0f}\n"
+                analysis_text += f"- **Highest Expense**: {largest_category} (${largest_expense:,.0f})\n"
+                analysis_text += f"- **Lowest Expense**: {smallest_category} (${smallest_expense:,.0f})\n"
+                analysis_text += f"- **Expense Range**: ${largest_expense - smallest_expense:,.0f}\n"
+                
+                # Budget Recommendations
+                analysis_text += "\n## 💡 **Smart Budget Insights**\n"
+                
+                # 50/30/20 Rule Analysis
+                if income > 0:
+                    needs_target = income * 0.50
+                    wants_target = income * 0.30
+                    savings_target = income * 0.20
+                    
+                    analysis_text += f"**50/30/20 Rule Comparison:**\n"
+                    analysis_text += f"- Needs Target (50%): ${needs_target:,.0f}\n"
+                    analysis_text += f"- Wants Target (30%): ${wants_target:,.0f}\n"
+                    analysis_text += f"- Savings Target (20%): ${savings_target:,.0f}\n"
+                    
+                    if savings_rate >= 20:
+                        analysis_text += "✅ **Excellent savings rate!**\n"
+                    elif savings_rate >= 10:
+                        analysis_text += "⚠️ **Good savings, aim for 20%**\n"
+                    else:
+                        analysis_text += "🔴 **Consider reducing expenses to save more**\n"
+                
+                # Category Warnings
+                for category, amount in zip(categories, values):
+                    if income > 0:
+                        cat_percentage = (amount / income * 100)
+                        if category.lower() in ['rent', 'housing'] and cat_percentage > 30:
+                            analysis_text += f"⚠️ **Housing costs high**: {cat_percentage:.1f}% (recommend <30%)\n"
+                        elif category.lower() in ['food', 'dining'] and cat_percentage > 15:
+                            analysis_text += f"⚠️ **Food costs high**: {cat_percentage:.1f}% (recommend <15%)\n"
                 
                 return analysis_text
         except Exception as e:
@@ -65,28 +117,120 @@ def analyze_data_with_repl(data_type, data):
             holdings = portfolio_data.get("holdings", [])
             total_value = sum(holding.get("value", 0) for holding in holdings)
             
-            analysis_text = "📊 **Portfolio Analysis**\n\n"
+            analysis_text = "📊 **Advanced Portfolio Analysis**\n\n"
             
-            # Holdings breakdown
-            for holding in holdings:
+            # Portfolio Overview
+            analysis_text += "## 💼 **Portfolio Overview**\n"
+            analysis_text += f"- **Total Portfolio Value**: ${total_value:,.2f}\n"
+            analysis_text += f"- **Number of Holdings**: {len(holdings)}\n"
+            
+            if holdings:
+                values = [holding.get("value", 0) for holding in holdings]
+                avg_holding = sum(values) / len(values)
+                max_holding = max(values)
+                min_holding = min(values)
+                
+                analysis_text += f"- **Average Holding Size**: ${avg_holding:,.2f}\n"
+                analysis_text += f"- **Largest Position**: ${max_holding:,.2f}\n"
+                analysis_text += f"- **Smallest Position**: ${min_holding:,.2f}\n"
+            
+            # Detailed Holdings breakdown
+            analysis_text += "\n## 📈 **Holdings Breakdown**\n"
+            sorted_holdings = sorted(holdings, key=lambda x: x.get("value", 0), reverse=True)
+            
+            for i, holding in enumerate(sorted_holdings, 1):
                 symbol = holding.get("symbol", "Unknown")
                 value = holding.get("value", 0)
-                allocation = holding.get("allocation", 0)
-                analysis_text += f"**{symbol}**: ${value:,.2f} ({allocation:.1f}%)\n"
+                shares = holding.get("shares", 0)
+                allocation = holding.get("allocation", (value/total_value*100) if total_value > 0 else 0)
+                sector = holding.get("sector", "Unknown")
+                
+                # Calculate position concentration risk
+                risk_level = "🟢 Low" if allocation < 10 else "🟡 Medium" if allocation < 25 else "🔴 High"
+                
+                analysis_text += f"**#{i} {symbol}** - {sector}\n"
+                analysis_text += f"  └─ Value: ${value:,.2f} | Shares: {shares:,.0f} | Weight: {allocation:.1f}%\n"
+                analysis_text += f"  └─ Concentration Risk: {risk_level}\n\n"
             
-            # Sector analysis
+            # Sector analysis with advanced metrics
             sectors = {}
+            sector_values = {}
             for holding in holdings:
                 sector = holding.get("sector", "Unknown")
-                sectors[sector] = sectors.get(sector, 0) + holding.get("allocation", 0)
+                allocation = holding.get("allocation", 0)
+                value = holding.get("value", 0)
+                
+                sectors[sector] = sectors.get(sector, 0) + allocation
+                sector_values[sector] = sector_values.get(sector, 0) + value
             
             if sectors:
-                analysis_text += "\n**Sector Allocation:**\n"
-                for sector, allocation in sorted(sectors.items(), key=lambda x: x[1], reverse=True):
-                    bar = "█" * int(allocation / 10)
-                    analysis_text += f"- {sector}: {allocation:.1f}% {bar}\n"
+                analysis_text += "## 🏭 **Sector Diversification Analysis**\n"
+                sorted_sectors = sorted(sectors.items(), key=lambda x: x[1], reverse=True)
+                
+                for sector, allocation in sorted_sectors:
+                    bar = "█" * min(int(allocation / 2), 30)
+                    value = sector_values.get(sector, 0)
+                    
+                    # Sector concentration assessment
+                    if allocation > 40:
+                        risk_emoji = "🔴"
+                        risk_text = "Over-concentrated"
+                    elif allocation > 25:
+                        risk_emoji = "🟡"
+                        risk_text = "Moderate concentration"
+                    else:
+                        risk_emoji = "🟢"
+                        risk_text = "Well diversified"
+                    
+                    analysis_text += f"**{sector}**: {allocation:.1f}% (${value:,.2f}) {risk_emoji}\n"
+                    analysis_text += f"  └─ {bar} {risk_text}\n\n"
             
-            analysis_text += f"\n**Total Portfolio Value**: ${total_value:,.2f}\n"
+            # Portfolio Health Metrics
+            analysis_text += "## 🎯 **Portfolio Health Assessment**\n"
+            
+            # Diversification Score
+            num_sectors = len(sectors)
+            if num_sectors >= 8:
+                diversification = "🟢 Excellent"
+            elif num_sectors >= 5:
+                diversification = "🟡 Good"
+            else:
+                diversification = "🔴 Poor"
+            
+            analysis_text += f"- **Sector Diversification**: {diversification} ({num_sectors} sectors)\n"
+            
+            # Concentration Risk
+            if holdings:
+                top_3_allocation = sum(sorted([h.get("allocation", 0) for h in holdings], reverse=True)[:3])
+                if top_3_allocation > 60:
+                    concentration_risk = "🔴 High"
+                elif top_3_allocation > 40:
+                    concentration_risk = "🟡 Medium"
+                else:
+                    concentration_risk = "🟢 Low"
+                
+                analysis_text += f"- **Concentration Risk**: {concentration_risk} (Top 3: {top_3_allocation:.1f}%)\n"
+            
+            # Portfolio Recommendations
+            analysis_text += "\n## 💡 **Portfolio Optimization Recommendations**\n"
+            
+            # Check for over-concentration
+            for holding in holdings:
+                allocation = holding.get("allocation", 0)
+                if allocation > 25:
+                    analysis_text += f"⚠️ **{holding.get('symbol', 'Unknown')}** is over-weighted at {allocation:.1f}% (consider rebalancing)\n"
+            
+            # Sector recommendations
+            for sector, allocation in sectors.items():
+                if allocation > 40:
+                    analysis_text += f"⚠️ **{sector}** sector over-weighted at {allocation:.1f}% (consider diversification)\n"
+            
+            # Diversification suggestions
+            if num_sectors < 5:
+                analysis_text += "💡 **Consider adding exposure to more sectors for better diversification**\n"
+            
+            if len(holdings) < 10:
+                analysis_text += "💡 **Consider adding more holdings to reduce single-stock risk**\n"
             
             return analysis_text
         except Exception as e:
@@ -98,37 +242,198 @@ def analyze_data_with_repl(data_type, data):
             symbol = stock_data.get("symbol", "Unknown")
             price_str = stock_data.get("current_price", "0")
             
-            analysis_text = f"📊 **Stock Analysis for {symbol}**\n\n"
+            analysis_text = f"📈 **Comprehensive Stock Analysis: {symbol}**\n\n"
             
-            # Basic info
-            analysis_text += f"**Current Price**: {price_str}\n"
-            analysis_text += f"**Company**: {stock_data.get('company_name', 'N/A')}\n"
-            analysis_text += f"**Sector**: {stock_data.get('sector', 'N/A')}\n\n"
+            # Company Overview
+            analysis_text += "## 🏢 **Company Overview**\n"
+            analysis_text += f"- **Symbol**: {symbol}\n"
+            analysis_text += f"- **Current Price**: {price_str}\n"
+            analysis_text += f"- **Company**: {stock_data.get('company_name', 'N/A')}\n"
+            analysis_text += f"- **Sector**: {stock_data.get('sector', 'N/A')}\n"
+            analysis_text += f"- **Industry**: {stock_data.get('industry', 'N/A')}\n"
+            analysis_text += f"- **Market Cap**: {stock_data.get('market_cap', 'N/A')}\n\n"
             
-            # Performance metrics
+            # Financial Metrics
+            financials = stock_data.get("financials", {})
+            if financials:
+                analysis_text += "## 💹 **Key Financial Metrics**\n"
+                
+                # Valuation metrics
+                pe_ratio = financials.get("pe_ratio", "N/A")
+                pb_ratio = financials.get("pb_ratio", "N/A")
+                ps_ratio = financials.get("ps_ratio", "N/A")
+                
+                analysis_text += f"- **P/E Ratio**: {pe_ratio}"
+                if pe_ratio != "N/A" and isinstance(pe_ratio, (int, float)):
+                    if pe_ratio < 15:
+                        analysis_text += " 🟢 (Undervalued)"
+                    elif pe_ratio > 25:
+                        analysis_text += " 🔴 (Potentially Overvalued)"
+                    else:
+                        analysis_text += " 🟡 (Fairly Valued)"
+                analysis_text += "\n"
+                
+                analysis_text += f"- **P/B Ratio**: {pb_ratio}\n"
+                analysis_text += f"- **P/S Ratio**: {ps_ratio}\n"
+                
+                # Profitability metrics
+                analysis_text += f"- **ROE**: {financials.get('roe', 'N/A')}\n"
+                analysis_text += f"- **ROA**: {financials.get('roa', 'N/A')}\n"
+                analysis_text += f"- **Profit Margin**: {financials.get('profit_margin', 'N/A')}\n"
+                analysis_text += f"- **Revenue Growth**: {financials.get('revenue_growth', 'N/A')}\n\n"
+            
+            # Performance analysis with trend indicators
             performance = stock_data.get("performance", {})
             if performance:
-                analysis_text += "**Performance:**\n"
-                for period, return_pct in performance.items():
-                    analysis_text += f"- {period.replace('_', ' ').title()}: {return_pct}\n"
+                analysis_text += "## 📊 **Performance Analysis**\n"
+                
+                periods = ["1d", "1w", "1m", "3m", "6m", "1y", "ytd"]
+                for period in periods:
+                    if period in performance:
+                        return_pct = performance[period]
+                        
+                        # Add trend indicators
+                        if isinstance(return_pct, str) and "%" in return_pct:
+                            try:
+                                pct_value = float(return_pct.replace("%", ""))
+                                if pct_value > 0:
+                                    trend = "📈"
+                                elif pct_value < 0:
+                                    trend = "📉"
+                                else:
+                                    trend = "➡️"
+                            except:
+                                trend = ""
+                        else:
+                            trend = ""
+                        
+                        analysis_text += f"- **{period.upper()}**: {return_pct} {trend}\n"
+                analysis_text += "\n"
             
-            # Risk assessment
+            # Advanced Risk Assessment
             risk_data = stock_data.get("risk_assessment", {})
             if risk_data:
-                analysis_text += f"\n**Risk Level**: {risk_data.get('risk_level', 'N/A')}\n"
-                analysis_text += f"**30d Volatility**: {risk_data.get('volatility_30d', 'N/A')}\n"
+                analysis_text += "## ⚠️ **Risk Assessment**\n"
+                
+                risk_level = risk_data.get('risk_level', 'N/A')
+                volatility = risk_data.get('volatility_30d', 'N/A')
+                beta = risk_data.get('beta', 'N/A')
+                
+                # Risk level with emoji indicators
+                if risk_level.lower() == "low":
+                    risk_emoji = "🟢"
+                elif risk_level.lower() == "medium":
+                    risk_emoji = "🟡"
+                elif risk_level.lower() == "high":
+                    risk_emoji = "🔴"
+                else:
+                    risk_emoji = ""
+                
+                analysis_text += f"- **Risk Level**: {risk_level} {risk_emoji}\n"
+                analysis_text += f"- **30-Day Volatility**: {volatility}\n"
+                analysis_text += f"- **Beta**: {beta}"
+                
+                if beta != "N/A" and isinstance(beta, (int, float)):
+                    if beta > 1.2:
+                        analysis_text += " (High volatility vs market)"
+                    elif beta < 0.8:
+                        analysis_text += " (Low volatility vs market)"
+                    else:
+                        analysis_text += " (Similar to market)"
+                analysis_text += "\n\n"
             
-            # Recommendation
+            # Technical Analysis
+            technical = stock_data.get("technical_analysis", {})
+            if technical:
+                analysis_text += "## 📈 **Technical Analysis**\n"
+                analysis_text += f"- **50-Day MA**: {technical.get('ma_50', 'N/A')}\n"
+                analysis_text += f"- **200-Day MA**: {technical.get('ma_200', 'N/A')}\n"
+                analysis_text += f"- **RSI**: {technical.get('rsi', 'N/A')}\n"
+                analysis_text += f"- **Support Level**: {technical.get('support', 'N/A')}\n"
+                analysis_text += f"- **Resistance Level**: {technical.get('resistance', 'N/A')}\n\n"
+            
+            # Investment Recommendation with detailed reasoning
             recommendation = stock_data.get("recommendation", {})
             if recommendation:
-                analysis_text += f"\n**Recommendation**: {recommendation.get('action', 'N/A')}\n"
-                analysis_text += f"**Confidence**: {recommendation.get('confidence', 'N/A')}\n"
+                action = recommendation.get('action', 'N/A')
+                confidence = recommendation.get('confidence', 'N/A')
+                reasoning = recommendation.get('reasoning', '')
+                
+                analysis_text += "## 💡 **Investment Recommendation**\n"
+                
+                # Action with emoji
+                if action.lower() == "buy":
+                    action_emoji = "🟢"
+                elif action.lower() == "sell":
+                    action_emoji = "🔴"
+                elif action.lower() == "hold":
+                    action_emoji = "🟡"
+                else:
+                    action_emoji = ""
+                
+                analysis_text += f"- **Action**: {action} {action_emoji}\n"
+                analysis_text += f"- **Confidence**: {confidence}\n"
+                
+                if reasoning:
+                    analysis_text += f"- **Reasoning**: {reasoning}\n"
+                
+                analysis_text += "\n"
+            
+            # Additional Investment Considerations
+            analysis_text += "## 🎯 **Investment Considerations**\n"
+            
+            # Dividend info
+            dividend_yield = stock_data.get("dividend_yield", "N/A")
+            if dividend_yield != "N/A":
+                analysis_text += f"- **Dividend Yield**: {dividend_yield}\n"
+            
+            # Analyst ratings
+            analyst_rating = stock_data.get("analyst_rating", "N/A")
+            if analyst_rating != "N/A":
+                analysis_text += f"- **Analyst Rating**: {analyst_rating}\n"
+            
+            # Price targets
+            price_target = stock_data.get("price_target", "N/A")
+            if price_target != "N/A":
+                analysis_text += f"- **Price Target**: {price_target}\n"
+            
+            # ESG score
+            esg_score = stock_data.get("esg_score", "N/A")
+            if esg_score != "N/A":
+                analysis_text += f"- **ESG Score**: {esg_score}\n"
             
             return analysis_text
         except Exception as e:
             return f"Error analyzing stock data: {str(e)}"
 
     return None
+
+
+def determine_intended_tool(message):
+    """Determine which tool the AI intends to use based on the message"""
+    message_lower = message.lower()
+    
+    tool_detection_map = {
+        "budget_planner": ["budget", "income", "expense", "spending", "allocat"],
+        "investment_analyzer": ["stock", "invest", "buy", "sell", "analyze", "AAPL", "GOOGL", "TSLA"],
+        "portfolio_analyzer": ["portfolio", "holdings", "allocation", "diversif"],
+        "market_trends": ["market", "trend", "news", "sector", "economic"],
+        "expense_tracker": ["track", "expense", "spending", "categoriz"]
+    }
+    
+    tool_names = {
+        "budget_planner": "Budget Planner",
+        "investment_analyzer": "Investment Analyzer", 
+        "expense_tracker": "Expense Tracker",
+        "market_trends": "Market Trends Analyzer",
+        "portfolio_analyzer": "Portfolio Analyzer",
+    }
+    
+    for tool_key, keywords in tool_detection_map.items():
+        if any(keyword in message_lower for keyword in keywords):
+            return tool_key, tool_names.get(tool_key, tool_key)
+    
+    return None, None
 
 
 def process_financial_query(message, history):
@@ -161,40 +466,14 @@ def process_financial_query(message, history):
 
     # Start timer
     start_time = time.time()
-
-    # Show processing status with timer
-    def update_timer(base_message, start_time):
-        elapsed = time.time() - start_time
-        return f"{base_message} ({elapsed:.1f}s)"
-
-    # Show processing animation with actual work happening
-    processing_messages = [
-        "🔄 Assistant is analyzing your request...",
-        "🔍 Understanding your financial query...", 
-        "🧠 Processing financial data...",
-        "⚙️ Activating financial tools..."
-    ]
-    
     init_message_start_index = len(history)
     
-    # Show first message and start processing
-    elapsed = time.time() - start_time
-    history.append(ChatMessage(role="assistant", content=f"{processing_messages[0]} ({elapsed:.1f}s)"))
-    yield history
-    
     try:
-        # Show animation messages while doing actual processing
-        for i, msg in enumerate(processing_messages[1:], 1):
-            elapsed = time.time() - start_time
-            history[-1] = ChatMessage(role="assistant", content=f"{msg} ({elapsed:.1f}s)")
-            yield history
-            time.sleep(1.0)  # Shorter delay
-        
-        # Process message through agent using the actual user message
+        # Process message through agent directly - no animations
         response, tool_used, tool_result = agent.process_message_with_details(
             last_user_message, agent_history
         )
-        # Show which tool is being used with enhanced status messages
+        # Step 5: Show tool execution results
         if tool_used:
             tool_names = {
                 "budget_planner": "Budget Planner",
@@ -205,8 +484,11 @@ def process_financial_query(message, history):
             }
             tool_display_name = tool_names.get(tool_used, tool_used)
             
-            # Skip tool processing animation to make it faster
-            pass
+            # Show tool execution completion
+            elapsed = time.time() - start_time
+            history[-1] = ChatMessage(role="assistant", content=f"✅ {tool_display_name} completed successfully... ({elapsed:.1f}s)")
+            yield history
+            time.sleep(0.3)
 
             # Show tool output with metadata
             if tool_result:
@@ -280,12 +562,14 @@ def process_financial_query(message, history):
                 ))
                 yield history
 
-        # Add visualization if applicable
+        # Add visualization if applicable with delay
         if tool_result and tool_used in [
             "budget_planner",
             "portfolio_analyzer",
             "investment_analyzer",
         ]:
+            # Add 1 second delay before data analysis
+            time.sleep(1.0)
             viz_type = {
                 "budget_planner": "budget",
                 "portfolio_analyzer": "portfolio",

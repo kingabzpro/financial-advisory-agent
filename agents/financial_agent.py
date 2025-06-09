@@ -132,9 +132,10 @@ When a user asks a question:
         message_lower = message.lower()
         selected_tool = None
 
+        # Enhanced tool selection with better keyword matching
         if any(
             word in message_lower
-            for word in ["budget", "income", "expense", "spending"]
+            for word in ["budget", "income", "expense", "spending", "allocat"]
         ):
             selected_tool = "budget_planner"
         elif any(
@@ -143,14 +144,14 @@ When a user asks a question:
         ) and re.search(r"\b[A-Z]{2,5}\b", message):
             selected_tool = "investment_analyzer"
         elif any(
-            word in message_lower for word in ["portfolio", "holdings", "allocation"]
+            word in message_lower for word in ["portfolio", "holdings", "allocation", "diversif"]
         ):
             selected_tool = "portfolio_analyzer"
         elif any(
-            word in message_lower for word in ["market", "trend", "news", "sector"]
+            word in message_lower for word in ["market", "trend", "news", "sector", "economic"]
         ):
             selected_tool = "market_trends"
-        elif any(word in message_lower for word in ["track", "expense", "spending"]):
+        elif any(word in message_lower for word in ["track", "expense", "spending", "categoriz"]):
             selected_tool = "expense_tracker"
 
         # If a tool is selected, use it directly
@@ -158,21 +159,28 @@ When a user asks a question:
             try:
                 tool = self.tools_by_name[selected_tool]
                 tool_input = self._prepare_tool_input(message, selected_tool)
+                
+                # Execute the tool
                 tool_result = tool.func(tool_input)
 
                 # Generate response based on tool result
-                response_prompt = f"""Based on the following analysis from {selected_tool}:
+                response_prompt = f"""Based on the following analysis from the {selected_tool.replace('_', ' ').title()}:
 
 {tool_result}
 
 Provide comprehensive financial advice to the user addressing their question: {message}
 
-Be specific, actionable, and reference the data from the analysis."""
+Guidelines:
+- Be specific and actionable
+- Reference key data points from the analysis
+- Provide clear recommendations
+- Use a professional but friendly tone
+- Structure your response with clear sections if needed"""
 
                 response = self.llm.invoke(
                     [
                         SystemMessage(
-                            content="You are a professional financial advisor. Provide clear, actionable advice based on the analysis results."
+                            content="You are a professional financial advisor. Provide clear, actionable advice based on the analysis results. Be thorough but concise."
                         ),
                         HumanMessage(content=response_prompt),
                     ]
@@ -183,7 +191,7 @@ Be specific, actionable, and reference the data from the analysis."""
             except Exception as e:
                 return f"Error using {selected_tool}: {str(e)}", selected_tool, None
 
-        # Fallback to agent executor
+        # Fallback to agent executor for complex queries
         try:
             result = self.agent_executor.invoke({"input": message, "messages": []})
 

@@ -476,98 +476,117 @@ class FinancialTools:
         def market_trends(query: str) -> str:
             """Get comprehensive real-time market trends, news, and sector analysis"""
             try:
-                # Enhanced market analysis with multiple data sources
-                results = {}
+                # Get current year for search queries
+                current_year = datetime.now().year
                 
-                # Get market news and trends
-                market_news = self.tavily_search.run(
-                    f"stock market {query} trends analysis financial news 2024"
-                )
-                results["market_news"] = market_news
+                # Status tracking for API calls
+                status_updates = []
                 
-                # Get sector-specific information if applicable
-                sector_keywords = ["technology", "healthcare", "finance", "energy", "consumer", "industrial"]
-                if any(sector in query.lower() for sector in sector_keywords):
-                    sector_analysis = self.tavily_search.run(
-                        f"{query} sector performance analysis trends 2024"
-                    )
-                    results["sector_analysis"] = sector_analysis
+                # Optimized single comprehensive search instead of multiple calls
+                comprehensive_query = f"stock market {query} trends analysis financial news {current_year} latest"
                 
-                # Fetch key market indices for context
+                # Get primary market information
+                status_updates.append("🔍 Fetching latest market news via Tavily Search API...")
+                market_news = self.tavily_search.run(comprehensive_query)
+                status_updates.append("✅ Market news retrieved successfully")
+                
+                # Quick market indices check (reduced to just S&P 500 and NASDAQ for speed)
+                index_data = {}
+                market_sentiment = {"overall": "Unknown", "note": "Limited data"}
+                
                 try:
-                    indices = ["^GSPC", "^DJI", "^IXIC", "^RUT"]  # S&P 500, Dow, NASDAQ, Russell 2000
-                    index_data = {}
+                    status_updates.append("📊 Fetching market indices via Yahoo Finance API...")
+                    # Fetch only key indices for speed
+                    key_indices = ["^GSPC", "^IXIC"]  # S&P 500, NASDAQ
                     
-                    for index in indices:
+                    for index in key_indices:
+                        index_names = {"^GSPC": "S&P 500", "^IXIC": "NASDAQ"}
+                        status_updates.append(f"📈 Getting {index_names[index]} data...")
+                        
                         ticker = yf.Ticker(index)
-                        hist = ticker.history(period="5d")
+                        hist = ticker.history(period="2d")  # Reduced period for speed
                         if not hist.empty:
                             current = hist["Close"].iloc[-1]
                             prev = hist["Close"].iloc[-2] if len(hist) > 1 else current
                             change = ((current - prev) / prev * 100) if prev != 0 else 0
                             
-                            index_names = {
-                                "^GSPC": "S&P 500",
-                                "^DJI": "Dow Jones",
-                                "^IXIC": "NASDAQ",
-                                "^RUT": "Russell 2000"
-                            }
-                            
                             index_data[index_names[index]] = {
-                                "current": f"{current:.2f}",
-                                "change": f"{change:+.2f}%",
-                                "direction": "up" if change > 0 else "down" if change < 0 else "flat"
+                                "current": round(current, 2),
+                                "change_pct": round(change, 2),
+                                "direction": "📈" if change > 0 else "📉" if change < 0 else "➡️"
                             }
                     
-                    results["market_indices"] = index_data
+                    status_updates.append("✅ Market indices data retrieved successfully")
                     
-                    # Market sentiment analysis
-                    positive_count = sum(1 for data in index_data.values() if data["direction"] == "up")
-                    total_count = len(index_data)
-                    
-                    if positive_count >= total_count * 0.75:
-                        sentiment = "Bullish"
-                    elif positive_count <= total_count * 0.25:
-                        sentiment = "Bearish"
-                    else:
-                        sentiment = "Mixed"
-                    
-                    results["market_sentiment"] = {
-                        "overall": sentiment,
-                        "positive_indices": f"{positive_count}/{total_count}",
-                        "confidence": "High" if positive_count in [0, total_count] else "Medium"
-                    }
-                    
+                    # Simple sentiment based on available indices
+                    if index_data:
+                        status_updates.append("🧠 Analyzing market sentiment...")
+                        positive_count = sum(1 for data in index_data.values() if data["change_pct"] > 0)
+                        total_count = len(index_data)
+                        
+                        if positive_count >= total_count * 0.75:
+                            sentiment = "🟢 Bullish"
+                        elif positive_count <= total_count * 0.25:
+                            sentiment = "🔴 Bearish"
+                        else:
+                            sentiment = "🟡 Mixed"
+                        
+                        market_sentiment = {
+                            "overall": sentiment,
+                            "summary": f"{positive_count}/{total_count} indices positive"
+                        }
+                        status_updates.append("✅ Market sentiment analysis completed")
+                        
                 except Exception as index_error:
-                    results["market_indices"] = f"Error fetching index data: {str(index_error)}"
+                    status_updates.append(f"❌ Error fetching market indices: {str(index_error)}")
+                    index_data = {"error": f"Index data unavailable: {str(index_error)}"}
                 
-                # Add economic indicators context
-                try:
-                    economic_query = self.tavily_search.run(
-                        "Federal Reserve interest rates inflation economic indicators 2024"
-                    )
-                    results["economic_context"] = economic_query
-                except Exception as econ_error:
-                    results["economic_context"] = f"Error fetching economic data: {str(econ_error)}"
+                # Extract key themes from search results
+                status_updates.append("🔍 Analyzing key market themes...")
+                key_themes = _extract_key_themes(market_news)
+                status_updates.append("✅ Theme analysis completed")
                 
-                # Compile comprehensive analysis
+                # Format output for better readability
+                def format_search_results(results):
+                    """Convert search results to readable format"""
+                    if isinstance(results, list):
+                        # Extract key information from search results
+                        formatted = []
+                        for item in results[:3]:  # Limit to top 3 results
+                            if isinstance(item, dict):
+                                title = item.get('title', 'No title')
+                                content = item.get('content', item.get('snippet', 'No content'))
+                                formatted.append(f"• {title}: {content[:200]}...")
+                            else:
+                                formatted.append(f"• {str(item)[:200]}...")
+                        return "\n".join(formatted)
+                    elif isinstance(results, str):
+                        return results[:1000] + "..." if len(results) > 1000 else results
+                    else:
+                        return str(results)[:1000]
+                
+                status_updates.append("📋 Compiling final analysis report...")
+                
+                # Compile streamlined analysis
                 analysis = {
                     "query": query,
-                    "market_overview": results.get("market_news", "No market news available"),
-                    "sector_insights": results.get("sector_analysis", "No sector-specific data"),
-                    "market_indices": results.get("market_indices", {}),
-                    "market_sentiment": results.get("market_sentiment", {}),
-                    "economic_backdrop": results.get("economic_context", "No economic context available"),
-                    "analysis_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "key_themes": _extract_key_themes(results.get("market_news", "")),
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "api_execution_log": status_updates,
+                    "market_summary": format_search_results(market_news),
+                    "key_indices": index_data,
+                    "market_sentiment": market_sentiment,
+                    "key_themes": key_themes,
+                    "note": "Real-time API status tracking enabled"
                 }
                 
-                return json.dumps(analysis, indent=2)
+                status_updates.append("✅ Analysis report completed successfully")
+                
+                return json.dumps(analysis, indent=2, ensure_ascii=False)
                 
             except Exception as e:
-                return f"Error fetching comprehensive market analysis: {str(e)}"
+                return f"Error fetching market analysis: {str(e)}"
         
-        def _extract_key_themes(news_text: str) -> list:
+        def _extract_key_themes(news_text) -> list:
             """Extract key themes from market news"""
             themes = []
             keywords = {
@@ -578,6 +597,14 @@ class FinancialTools:
                 "technology": ["ai", "artificial intelligence", "tech stocks", "innovation"],
                 "recession": ["recession", "economic downturn", "market crash"],
             }
+            
+            # Handle both string and list inputs
+            if isinstance(news_text, list):
+                # Convert list to string
+                news_text = " ".join(str(item) for item in news_text)
+            elif not isinstance(news_text, str):
+                # Convert other types to string
+                news_text = str(news_text)
             
             news_lower = news_text.lower()
             for theme, terms in keywords.items():

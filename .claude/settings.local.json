@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python3:*)",
-      "WebFetch(domain:www.gradio.app)"
+      "WebFetch(domain:www.gradio.app)",
+      "Bash(python:*)"
     ],
     "deny": []
   }
