@@ -19,7 +19,7 @@ class FinancialAdvisorAgent:
     def __init__(self, tools: List[Tool], openai_api_key: str):
         self.tools = tools
         self.llm = ChatOpenAI(
-            api_key=openai_api_key, model="gpt-4.1-2025-04-14", temperature=0.7
+            api_key=openai_api_key, model="gpt-4.1-mini-2025-04-14", temperature=0.7
         )
         self.tools_by_name = {tool.name: tool for tool in tools}
 
