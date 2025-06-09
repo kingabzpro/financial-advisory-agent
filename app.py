@@ -436,6 +436,35 @@ def determine_intended_tool(message):
     return None, None
 
 
+def determine_response_type(message):
+    """Determine if user wants detailed report or short response"""
+    message_lower = message.lower()
+    
+    # Keywords indicating detailed response preference
+    detailed_keywords = [
+        "detailed", "detail", "comprehensive", "thorough", "in-depth", "full analysis", 
+        "complete", "report", "breakdown", "explain", "elaborate", "deep dive",
+        "extensive", "detailed analysis", "full report", "comprehensive report"
+    ]
+    
+    # Keywords indicating short response preference  
+    short_keywords = [
+        "quick", "brief", "short", "summary", "concise", "simple", "fast",
+        "just tell me", "quickly", "in short", "tldr", "bottom line"
+    ]
+    
+    # Check for detailed indicators first
+    if any(keyword in message_lower for keyword in detailed_keywords):
+        return "detailed"
+    
+    # Check for short indicators
+    if any(keyword in message_lower for keyword in short_keywords):
+        return "short"
+    
+    # Default to short response
+    return "short"
+
+
 def process_financial_query(message, history):
     """Process user queries through the financial agent with streaming response"""
     # Get the actual user message from the last entry in history
@@ -471,6 +500,7 @@ def process_financial_query(message, history):
     try:
         # Show what tool will be used and processing status
         intended_tool_key, intended_tool_name = determine_intended_tool(last_user_message)
+        response_type = determine_response_type(last_user_message)
         
         # Always show status for all tools with expected time estimates
         if intended_tool_name:
@@ -495,7 +525,7 @@ def process_financial_query(message, history):
             yield history
         
         # Process message through agent
-        response, tool_used, tool_result = agent.process_message_with_details(
+        response, tool_used, tool_result, all_tools, all_results = agent.process_message_with_details(
             last_user_message, agent_history
         )
         
@@ -503,7 +533,10 @@ def process_financial_query(message, history):
         if len(history) > init_message_start_index:
             history.pop()  # Remove the processing message
         # Step 5: Show tool execution results
-        if tool_used:
+        if all_tools and all_results:
+            # Remove initialization messages but keep all previous conversation and tool info
+            history = history[:init_message_start_index]
+            
             tool_names = {
                 "budget_planner": "Budget Planner",
                 "investment_analyzer": "Investment Analyzer", 
@@ -511,67 +544,60 @@ def process_financial_query(message, history):
                 "market_trends": "Market Trends Analyzer",
                 "portfolio_analyzer": "Portfolio Analyzer",
             }
-            tool_display_name = tool_names.get(tool_used, tool_used)
             
-
-            # Show tool output with metadata
-            if tool_result:
-                # Remove initialization messages but keep all previous conversation and tool info
-                # Remove the initialization animation messages that were added
-                history = history[:init_message_start_index]
+            tool_emojis = {
+                "Budget Planner": "💰",
+                "Investment Analyzer": "📈", 
+                "Expense Tracker": "💳",
+                "Market Trends Analyzer": "📰",
+                "Portfolio Analyzer": "📊",
+            }
+            
+            # Show results for all tools used
+            for i, (used_tool, result) in enumerate(zip(all_tools, all_results)):
+                tool_display_name = tool_names.get(used_tool, used_tool)
                 
-                # Don't show tool activation message, go directly to results
-                
-                # Format tool result for display
-                try:
-                    import json
+                if result:
+                    # Format tool result for display
+                    try:
+                        import json
 
-                    if tool_result.startswith("{") or tool_result.startswith("["):
-                        # Pretty format JSON output
-                        parsed_result = json.loads(tool_result)
-                        # Truncate very long results for display
-                        if len(str(parsed_result)) > 2000:
-                            # Show summary for long results
-                            if isinstance(parsed_result, dict):
-                                summary = {
-                                    k: f"[{type(v).__name__}]"
-                                    if isinstance(v, (list, dict))
-                                    else v
-                                    for k, v in list(parsed_result.items())[:10]
-                                }
-                                display_result = f"```json\n{json.dumps(summary, indent=2)}\n... (truncated)\n```"
+                        if result.startswith("{") or result.startswith("["):
+                            # Pretty format JSON output
+                            parsed_result = json.loads(result)
+                            # Truncate very long results for display
+                            if len(str(parsed_result)) > 2000:
+                                # Show summary for long results
+                                if isinstance(parsed_result, dict):
+                                    summary = {
+                                        k: f"[{type(v).__name__}]"
+                                        if isinstance(v, (list, dict))
+                                        else v
+                                        for k, v in list(parsed_result.items())[:10]
+                                    }
+                                    display_result = f"```json\n{json.dumps(summary, indent=2)}\n... (truncated)\n```"
+                                else:
+                                    display_result = f"```json\n{json.dumps(parsed_result, indent=2)[:1000]}...\n```"
                             else:
-                                display_result = f"```json\n{json.dumps(parsed_result, indent=2)[:1000]}...\n```"
+                                formatted_result = json.dumps(parsed_result, indent=2)
+                                display_result = f"```json\n{formatted_result}\n```"
                         else:
-                            formatted_result = json.dumps(parsed_result, indent=2)
-                            display_result = f"```json\n{formatted_result}\n```"
-                    else:
-                        # Truncate non-JSON results
+                            # Truncate non-JSON results
+                            display_result = (
+                                result[:1000] + "..."
+                                if len(result) > 1000
+                                else result
+                            )
+                    except Exception as e:
                         display_result = (
-                            tool_result[:1000] + "..."
-                            if len(tool_result) > 1000
-                            else tool_result
+                            str(result)[:1000] + "..."
+                            if len(str(result)) > 1000
+                            else str(result)
                         )
-                except Exception as e:
-                    display_result = (
-                        str(tool_result)[:1000] + "..."
-                        if len(str(tool_result)) > 1000
-                        else str(tool_result)
-                    )
 
-                elapsed = time.time() - start_time
-                
-                # Create collapsible tool output with specific emojis for each tool
-                tool_emojis = {
-                    "Budget Planner": "💰",
-                    "Investment Analyzer": "📈", 
-                    "Expense Tracker": "💳",
-                    "Market Trends Analyzer": "📰",
-                    "Portfolio Analyzer": "📊",
-                }
-                tool_emoji = tool_emojis.get(tool_display_name, "🔧")
-                
-                collapsible_content = f"""
+                    tool_emoji = tool_emojis.get(tool_display_name, "🔧")
+                    
+                    collapsible_content = f"""
 <details>
 <summary><strong>{tool_emoji} {tool_display_name} Results</strong> - Click to expand</summary>
 
@@ -579,59 +605,60 @@ def process_financial_query(message, history):
 
 </details>
 """
-                
-                history.append(ChatMessage(
-                    role="assistant",
-                    content=collapsible_content,
-                ))
-                yield history
-
-        # Add visualization if applicable
-        if tool_result and tool_used in [
-            "budget_planner",
-            "portfolio_analyzer",
-            "investment_analyzer",
-        ]:
-            viz_type = {
-                "budget_planner": "budget",
-                "portfolio_analyzer": "portfolio",
-                "investment_analyzer": "stock",
-            }.get(tool_used)
-
-            try:
-                analysis_data = analyze_data_with_repl(viz_type, tool_result)
-
-                if analysis_data:
-                    elapsed = time.time() - start_time
                     
-                    # Create collapsible data analysis output
-                    collapsible_analysis = f"""
+                    history.append(ChatMessage(
+                        role="assistant",
+                        content=collapsible_content,
+                    ))
+                    yield history
+
+        # Add visualization for all applicable tools
+        if all_tools and all_results:
+            for used_tool, result in zip(all_tools, all_results):
+                if result and used_tool in ["budget_planner", "portfolio_analyzer", "investment_analyzer"]:
+                    viz_type = {
+                        "budget_planner": "budget",
+                        "portfolio_analyzer": "portfolio", 
+                        "investment_analyzer": "stock",
+                    }.get(used_tool)
+
+                    try:
+                        analysis_data = analyze_data_with_repl(viz_type, result)
+
+                        if analysis_data:
+                            tool_display_name = {
+                                "budget_planner": "Budget",
+                                "portfolio_analyzer": "Portfolio",
+                                "investment_analyzer": "Stock",
+                            }.get(used_tool, "Data")
+                            
+                            # Create collapsible data analysis output
+                            collapsible_analysis = f"""
 <details>
-<summary><strong>🔍 Data Analysis</strong> - Click to expand</summary>
+<summary><strong>🔍 {tool_display_name} Data Analysis</strong> - Click to expand</summary>
 
 {analysis_data}
 
 </details>
 """
-                    
-                    history.append(ChatMessage(
-                        role="assistant",
-                        content=collapsible_analysis,
-                    ))
-                    yield history
-                else:
-                    history.pop()
+                            
+                            history.append(ChatMessage(
+                                role="assistant",
+                                content=collapsible_analysis,
+                            ))
+                            yield history
 
-            except Exception as e:
-                history.pop()
+                    except Exception as e:
+                        # Silently continue if analysis fails
+                        pass
 
         # Stream the final response in real-time using LLM streaming
         if tool_used and tool_result:
-            # Use real LLM streaming
+            # Use real LLM streaming with response type
             streaming_content = ""
             history.append(ChatMessage(role="assistant", content=""))
             
-            for chunk in agent.stream_response(last_user_message, tool_result, tool_used):
+            for chunk in agent.stream_response(last_user_message, tool_result, tool_used, response_type):
                 streaming_content += chunk
                 history[-1] = ChatMessage(role="assistant", content=streaming_content)
                 yield history

@@ -60,16 +60,19 @@ When a user asks a question:
 
     def _extract_tool_usage(self, intermediate_steps):
         """Extract tool usage from intermediate steps"""
-        tool_used = None
-        tool_result = None
+        tools_used = []
+        tool_results = []
 
         for action, result in intermediate_steps:
             if hasattr(action, "tool"):
-                tool_used = action.tool
-                tool_result = result
-                break
+                tools_used.append(action.tool)
+                tool_results.append(result)
 
-        return tool_used, tool_result
+        # Return the last tool used and its result for backward compatibility
+        # But also return all tools and results for multi-tool scenarios
+        if tools_used:
+            return tools_used[-1], tool_results[-1], tools_used, tool_results
+        return None, None, [], []
 
     def _prepare_tool_input(self, message: str, tool_name: str) -> str:
         """Prepare input for specific tools based on the message"""
@@ -123,39 +126,53 @@ When a user asks a question:
 
     def process_message_with_details(
         self, message: str, history: List[dict] = None
-    ) -> Tuple[str, str, str]:
-        """Process a message and return response, tool used, and tool result"""
+    ) -> Tuple[str, str, str, List[str], List[str]]:
+        """Process a message and return response, tool used, tool result, and all tools/results"""
         if history is None:
             history = []
 
-        # Determine which tool to use based on message content
+        # Check if this is a multi-tool query (contains keywords for multiple tools)
         message_lower = message.lower()
-        selected_tool = None
+        tool_keywords = {
+            "budget_planner": ["budget", "income", "expense", "spending", "allocat"],
+            "investment_analyzer": ["stock", "invest", "buy", "sell", "analyze"],
+            "portfolio_analyzer": ["portfolio", "holdings", "allocation", "diversif"],
+            "market_trends": ["market", "trend", "news", "sector", "economic"],
+            "expense_tracker": ["track", "expense", "spending", "categoriz"]
+        }
+        
+        detected_tools = []
+        for tool_name, keywords in tool_keywords.items():
+            if any(word in message_lower for word in keywords):
+                # Special check for investment analyzer - needs stock symbols
+                if tool_name == "investment_analyzer":
+                    if re.search(r"\b[A-Z]{2,5}\b", message) or any(word in message_lower for word in ["stock", "invest", "recommend"]):
+                        detected_tools.append(tool_name)
+                else:
+                    detected_tools.append(tool_name)
+        
+        # If multiple tools detected or complex query, use agent executor
+        if len(detected_tools) > 1 or len(message.split()) > 15:
+            try:
+                result = self.agent_executor.invoke({"input": message, "messages": []})
 
-        # Enhanced tool selection with better keyword matching
-        if any(
-            word in message_lower
-            for word in ["budget", "income", "expense", "spending", "allocat"]
-        ):
-            selected_tool = "budget_planner"
-        elif any(
-            word in message_lower
-            for word in ["stock", "invest", "buy", "sell", "analyze"]
-        ) and re.search(r"\b[A-Z]{2,5}\b", message):
-            selected_tool = "investment_analyzer"
-        elif any(
-            word in message_lower for word in ["portfolio", "holdings", "allocation", "diversif"]
-        ):
-            selected_tool = "portfolio_analyzer"
-        elif any(
-            word in message_lower for word in ["market", "trend", "news", "sector", "economic"]
-        ):
-            selected_tool = "market_trends"
-        elif any(word in message_lower for word in ["track", "expense", "spending", "categoriz"]):
-            selected_tool = "expense_tracker"
+                tool_used, tool_result, all_tools, all_results = self._extract_tool_usage(
+                    result.get("intermediate_steps", [])
+                )
+                return result["output"], tool_used, tool_result, all_tools, all_results
 
-        # If a tool is selected, use it directly
-        if selected_tool and selected_tool in self.tools_by_name:
+            except Exception as e:
+                return (
+                    f"I encountered an error processing your request: {str(e)}",
+                    None,
+                    None,
+                    [],
+                    []
+                )
+        
+        # Single tool execution for simple queries
+        elif len(detected_tools) == 1:
+            selected_tool = detected_tools[0]
             try:
                 tool = self.tools_by_name[selected_tool]
                 tool_input = self._prepare_tool_input(message, selected_tool)
@@ -177,35 +194,40 @@ Keep response under 200 words with key insights and 2-3 actionable recommendatio
                     ]
                 )
 
-                return response.content, selected_tool, tool_result
+                return response.content, selected_tool, tool_result, [selected_tool], [tool_result]
 
             except Exception as e:
-                return f"Error using {selected_tool}: {str(e)}", selected_tool, None
+                return f"Error using {selected_tool}: {str(e)}", selected_tool, None, [], []
 
-        # Fallback to agent executor for complex queries
-        try:
-            result = self.agent_executor.invoke({"input": message, "messages": []})
+        # Fallback to agent executor for unclear queries
+        else:
+            try:
+                result = self.agent_executor.invoke({"input": message, "messages": []})
 
-            tool_used, tool_result = self._extract_tool_usage(
-                result.get("intermediate_steps", [])
-            )
-            return result["output"], tool_used, tool_result
+                tool_used, tool_result, all_tools, all_results = self._extract_tool_usage(
+                    result.get("intermediate_steps", [])
+                )
+                return result["output"], tool_used, tool_result, all_tools, all_results
 
-        except Exception as e:
-            return (
-                f"I encountered an error processing your request: {str(e)}",
-                None,
-                None,
-            )
+            except Exception as e:
+                return (
+                    f"I encountered an error processing your request: {str(e)}",
+                    None,
+                    None,
+                    [],
+                    []
+                )
 
     def process_message(self, message: str, history: List[dict] = None):
         """Process a user message and return response"""
-        response, _, _ = self.process_message_with_details(message, history)
+        response, _, _, _, _ = self.process_message_with_details(message, history)
         return response
     
-    def stream_response(self, message: str, tool_result: str, selected_tool: str):
+    def stream_response(self, message: str, tool_result: str, selected_tool: str, response_type: str = "short"):
         """Stream the LLM response in real-time"""
-        response_prompt = f"""Based on the following comprehensive analysis from the {selected_tool.replace('_', ' ').title()}:
+        
+        if response_type == "detailed":
+            response_prompt = f"""Based on the following comprehensive analysis from the {selected_tool.replace('_', ' ').title()}:
 
 {tool_result}
 
@@ -220,10 +242,18 @@ Guidelines:
 - Structure your response with clear sections
 - Provide context for your recommendations"""
 
+            system_message = "You are a professional financial advisor. Provide comprehensive, detailed advice based on the analysis results. Be thorough and educational."
+        else:
+            response_prompt = f"""Based on this {selected_tool.replace('_', ' ')} analysis, provide a concise financial summary for: {message}
+
+Data: {tool_result}
+
+Keep response under 200 words with key insights and 2-3 actionable recommendations."""
+
+            system_message = "Financial advisor. Be concise and actionable."
+
         messages = [
-            SystemMessage(
-                content="You are a professional financial advisor. Provide comprehensive, detailed advice based on the analysis results. Be thorough and educational."
-            ),
+            SystemMessage(content=system_message),
             HumanMessage(content=response_prompt),
         ]
         
