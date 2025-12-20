@@ -1,6 +1,6 @@
 # AI Financial Advisory Agent
 
-An intelligent financial advisory agent powered by OpenAI's GPT-4 and specialized financial tools. This agent provides comprehensive financial analysis, investment recommendations, budget planning, and market insights through an intuitive web interface.
+An intelligent financial advisory agent powered by OpenAI's `gpt-4.1-mini` and specialized financial tools. This agent provides comprehensive financial analysis, investment recommendations, budget planning, and market insights through an intuitive web interface.
 
 ## 🚀 Features
 
